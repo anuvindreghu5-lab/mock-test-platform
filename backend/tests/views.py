@@ -1,0 +1,126 @@
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from django.utils import timezone
+from django.core.files.storage import default_storage
+from django.conf import settings
+import os
+from rest_framework.permissions import AllowAny
+
+from .models import MockTest
+from .serializers import (
+    MockTestListSerializer, MockTestDetailSerializer, MockTestCreateSerializer
+)
+from questions.models import Question
+from questions.pdf_parser import parse_pdf
+from utils.permissions import IsAdminUser, IsOwnerOrAdmin
+
+
+class MockTestViewSet(viewsets.ModelViewSet):
+    queryset = MockTest.objects.all()
+    permission_classes = [AllowAny]
+
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return MockTestDetailSerializer
+        elif self.action == 'create':
+            return MockTestCreateSerializer
+        return MockTestListSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            test = serializer.save(created_by=request.user)
+            return Response(
+                MockTestDetailSerializer(test).data,
+                status=status.HTTP_201_CREATED
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def perform_destroy(self, instance):
+        instance.delete()
+
+    @action(detail=False, methods=['get'])
+    def my_tests(self, request):
+        tests = MockTest.objects.filter(created_by=request.user)
+        serializer = MockTestListSerializer(tests, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def available_tests(self, request):
+        tests = MockTest.objects.filter(status='published')
+        serializer = MockTestListSerializer(tests, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
+    def upload_pdf(self, request, pk=None):
+        test = self.get_object()
+
+        if 'pdf_file' not in request.FILES:
+            return Response(
+                {'error': 'No PDF file provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        pdf_file = request.FILES['pdf_file']
+        pdf_path = default_storage.save(f'temp_pdfs/{pdf_file.name}', pdf_file)
+        full_path = os.path.join(settings.MEDIA_ROOT, pdf_path)
+
+        try:
+            questions_data = parse_pdf(full_path)
+
+            if not questions_data:
+                return Response(
+                    {'error': 'No questions could be parsed from the PDF'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            def get_option(options, index):
+                if index < len(options):
+                    return options[index].split(') ', 1)[-1].strip()
+                return ''
+
+            created_count = 0
+            for idx, q_data in enumerate(questions_data, 1):
+                opts = q_data.get('options', [])
+                Question.objects.create(
+                    test=test,
+                    question_number=q_data.get('number', idx),
+                    question_text=q_data.get('question', ''),
+                    option_a=get_option(opts, 0),
+                    option_b=get_option(opts, 1),
+                    option_c=get_option(opts, 2),
+                    option_d=get_option(opts, 3),
+                    correct_answer=q_data.get('answer', ''),
+                    subject=q_data.get('subject', 'unknown'),
+                    question_type=q_data.get('type', 'mcq'),
+                    difficulty=q_data.get('difficulty', 'medium'),
+                )
+                created_count += 1
+
+            test.total_questions = created_count
+            test.save()
+
+            return Response({
+                'success': True,
+                'message': f'Successfully parsed {created_count} questions',
+                'total_questions': created_count,
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        finally:
+            if default_storage.exists(pdf_path):
+                default_storage.delete(pdf_path)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
+    def publish(self, request, pk=None):
+        test = self.get_object()
+        test.status = 'published'
+        test.published_at = timezone.now()
+        test.save()
+        return Response({'message': 'Test published successfully'})
