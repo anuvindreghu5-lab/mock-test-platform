@@ -1,5 +1,5 @@
-ERROR: ResolutionImpossiDjango>=4.2,<5.0
+Django>=4.2,<5.0
 djangorestframework
 gunicorn
 python-dotenv
-django-cors-headersble: for help visit https://pip.pypa.io/en/latest/topics/dependency-resolution/#dealing-with-dependency-conflicts
+django-cors-headers
