@@ -10,7 +10,9 @@ from .serializers import ResultSerializer
 
 from tests.models import MockTest
 from questions.models import Question
+from rest_framework.permissions import IsAuthenticated
 
+permission_classes = [IsAuthenticated]
 
 class ResultViewSet(viewsets.ViewSet):
 

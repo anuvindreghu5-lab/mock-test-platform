@@ -15,7 +15,9 @@ from .serializers import (
 from questions.models import Question
 from questions.pdf_parser import parse_pdf
 from utils.permissions import IsAdminUser, IsOwnerOrAdmin
+from rest_framework.permissions import IsAuthenticated
 
+permission_classes = [IsAuthenticated]
 
 class MockTestViewSet(viewsets.ModelViewSet):
     queryset = MockTest.objects.all()
