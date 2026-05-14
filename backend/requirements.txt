@@ -4,3 +4,4 @@ djangorestframework-simplejwt
 gunicorn
 python-dotenv
 django-cors-headers
+pdf2image
