@@ -1,5 +1,6 @@
 Django==4.2.30
 djangorestframework
+djangorestframework-simplejwt
 gunicorn
 python-dotenv
 django-cors-headers
