@@ -9,11 +9,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'your-secret-key-change-in-production'
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 DEBUG = False
-ALLOWED_HOSTS = [
-    "localhost",
-    "127.0.0.1",
+ALLOWED_HOSTS = ["*"]
+CSRF_TRUSTED_ORIGINS = [
+    "https://mock-test-platform-2scg.onrender.com"
 ]
-
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -122,6 +121,7 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    'https://YOUR-NETLIFY-SITE.netlify.app'
 ]
 
 CORS_ALLOW_CREDENTIALS = True
