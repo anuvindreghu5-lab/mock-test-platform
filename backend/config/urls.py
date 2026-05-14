@@ -26,10 +26,9 @@ urlpatterns = [
         'api/tests/<int:test_id>/bulk_questions/',
         BulkQuestionUploadView.as_view()
     ),
-    path('api/users/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/users/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 ]
-
 if settings.DEBUG:
     urlpatterns += static(
         settings.MEDIA_URL,
