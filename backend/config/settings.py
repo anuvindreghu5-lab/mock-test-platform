@@ -9,7 +9,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'your-secret-key-change-in-production'
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 DEBUG = False
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = [
+    "mock-test-platform-2scg.onrender.com",
+    "localhost",
+    "127.0.0.1"
+]
 CSRF_TRUSTED_ORIGINS = [
     "https://mock-test-platform-2scg.onrender.com"
 ]
@@ -119,11 +123,10 @@ SIMPLE_JWT = {
 
 # CORS Configuration
 CORS_ALLOWED_ORIGINS = [
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    'https://YOUR-NETLIFY-SITE.netlify.app'
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://astounding-truffle-6129f9.netlify.app"
 ]
-
 CORS_ALLOW_CREDENTIALS = True
 
 # Media Upload Limit (5MB)
