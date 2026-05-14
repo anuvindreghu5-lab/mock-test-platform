@@ -11,7 +11,7 @@ import json
 
 from typing import Dict, List, Optional
 
-from pdf2image import convert_from_path
+#from pdf2image import convert_from_path
 
 
 # ─────────────────────────────────────────────
