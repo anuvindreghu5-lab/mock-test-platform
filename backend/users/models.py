@@ -17,9 +17,11 @@ class CustomUser(AbstractUser):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
-        db_table = 'users'
-        verbose_name_plural = 'Users'
+    # FROM:
+class Meta:
+    db_table = 'users'
+    verbose_name_plural = 'Users'
 
-    def __str__(self):
-        return self.username
+# TO:
+class Meta:
+    verbose_name_plural = 'Users'
