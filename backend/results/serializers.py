@@ -1,13 +1,29 @@
 from rest_framework import serializers
 from .models import Result, UserAnswer
-from questions.serializers import QuestionSerializer as QuestionDetailSerializer
+from questions.models import Question
+
+# ✅ Custom question serializer with all options
+class QuestionInResultSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Question
+        fields = [
+            'id',
+            'question_text',
+            'option_a',
+            'option_b',
+            'option_c',
+            'option_d',
+            'correct_answer',
+            'subject',
+            'difficulty',
+        ]
 
 class UserAnswerSerializer(serializers.ModelSerializer):
-    question = QuestionDetailSerializer(read_only=True)
+    question = QuestionInResultSerializer(read_only=True)
 
     class Meta:
         model = UserAnswer
-        fields = ['id', 'question', 'selected_answer', 'is_correct', 
+        fields = ['id', 'question', 'selected_answer', 'is_correct',
                   'is_marked_for_review', 'time_spent_seconds']
 
 
@@ -20,4 +36,4 @@ class ResultSerializer(serializers.ModelSerializer):
         fields = ['id', 'test_title', 'total_questions', 'attempted_questions',
                   'correct_answers', 'wrong_answers', 'skipped_questions',
                   'obtained_marks', 'total_marks', 'percentage', 'time_taken_seconds',
-                  'is_passed', 'submitted_at', 'answers']
+                  'is_passed', 'submitted_at', 'answers', 'subject_analysis']
