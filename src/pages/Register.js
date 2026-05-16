@@ -18,33 +18,58 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Check passwords match before sending
+    if (formData.password !== formData.password2) {
+      setError("Passwords do not match!");
+      return;
+    }
+
     setLoading(true);
+    setError("");
+
     try {
       const response = await api.post("/users/register/", formData);
       setTokens(response.data.access, response.data.refresh);
       setUser(response.data.user);
       navigate("/dashboard");
     } catch (err) {
-      setError(
-        err.response?.data?.password?.[0] ||
-          err.response?.data?.username?.[0] ||
-          "Registration failed"
-      );
+      const data = err.response?.data;
+      if (data) {
+        // Collect all error messages from all fields
+        const messages = [];
+        Object.keys(data).forEach((key) => {
+          if (Array.isArray(data[key])) {
+            data[key].forEach((msg) => {
+              if (key === "username") messages.push(`Username: ${msg}`);
+              else if (key === "email") messages.push(`Email: ${msg}`);
+              else if (key === "password") messages.push(`Password: ${msg}`);
+              else if (key === "password2") messages.push(`Confirm Password: ${msg}`);
+              else messages.push(msg);
+            });
+          } else {
+            messages.push(data[key]);
+          }
+        });
+        setError(messages.join(" | "));
+      } else {
+        setError("Registration failed. Please try again!");
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-900 flex items-center justify-center">
-      <div className="bg-white p-8 rounded-lg shadow-lg w-96">
+    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-900 flex items-center justify-center p-4">
+      <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
         <h1 className="text-3xl font-bold text-center text-gray-800 mb-6">
           Create Account
         </h1>
 
         {error && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            {error}
+            ⚠️ {error}
           </div>
         )}
 
