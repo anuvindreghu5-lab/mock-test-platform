@@ -3,10 +3,6 @@ from .models import Result, UserAnswer
 from questions.models import Question
 
 class QuestionInResultSerializer(serializers.ModelSerializer):
-    option_a = serializers.SerializerMethodField()
-    option_b = serializers.SerializerMethodField()
-    option_c = serializers.SerializerMethodField()
-    option_d = serializers.SerializerMethodField()
 
     class Meta:
         model = Question
@@ -20,35 +16,6 @@ class QuestionInResultSerializer(serializers.ModelSerializer):
             'correct_answer',
             'subject',
         ]
-
-    def get_option_a(self, obj):
-        if obj.option_a:
-            return obj.option_a
-        if obj.options and len(obj.options) > 0:
-            return obj.options[0]
-        return ""
-
-    def get_option_b(self, obj):
-        if obj.option_b:
-            return obj.option_b
-        if obj.options and len(obj.options) > 1:
-            return obj.options[1]
-        return ""
-
-    def get_option_c(self, obj):
-        if obj.option_c:
-            return obj.option_c
-        if obj.options and len(obj.options) > 2:
-            return obj.options[2]
-        return ""
-
-    def get_option_d(self, obj):
-        if obj.option_d:
-            return obj.option_d
-        if obj.options and len(obj.options) > 3:
-            return obj.options[3]
-        return ""
-
 
 class UserAnswerSerializer(serializers.ModelSerializer):
     question = QuestionInResultSerializer(read_only=True)
