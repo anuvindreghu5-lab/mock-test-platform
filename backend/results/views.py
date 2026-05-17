@@ -460,18 +460,22 @@ class ResultViewSet(viewsets.ViewSet):
 
                 "is_correct":
                     ans.is_correct,
-
-                "question": {
-
-                    "question_text":
-                        ans.question.question_text,
-
-                    "correct_answer":
-                        ans.question.correct_answer,
-
-                    "subject":
-                        ans.question.subject,
-                }
+"question": {
+    "question_text":
+        ans.question.question_text,
+    "option_a":
+        ans.question.option_a,
+    "option_b":
+        ans.question.option_b,
+    "option_c":
+        ans.question.option_c,
+    "option_d":
+        ans.question.option_d,
+    "correct_answer":
+        ans.question.correct_answer,
+    "subject":
+        ans.question.subject,
+}
             })
 
 
