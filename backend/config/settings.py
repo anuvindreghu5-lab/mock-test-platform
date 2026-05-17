@@ -132,7 +132,7 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://rankpilot-8x6.pages.dev"
+    "https://mock-test-platform.anuvindreghu5.workers.dev"
 ]
 CORS_ALLOW_CREDENTIALS = True
 
