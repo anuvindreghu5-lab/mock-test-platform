@@ -20,4 +20,4 @@ class ResultSerializer(serializers.ModelSerializer):
         fields = ['id', 'test_title', 'total_questions', 'attempted_questions',
                   'correct_answers', 'wrong_answers', 'skipped_questions',
                   'obtained_marks', 'total_marks', 'percentage', 'time_taken_seconds',
-                  'is_passed', 'submitted_at', 'answers', 'subject_analysis']
+                  'is_passed', 'submitted_at', 'answers']
