@@ -15,9 +15,6 @@ from .serializers import (
 from questions.models import Question
 from questions.pdf_parser import parse_pdf
 from utils.permissions import IsAdminUser, IsOwnerOrAdmin
-from rest_framework.permissions import IsAuthenticated
-
-permission_classes = [IsAuthenticated]
 
 class MockTestViewSet(viewsets.ModelViewSet):
     queryset = MockTest.objects.all()
@@ -126,3 +123,49 @@ class MockTestViewSet(viewsets.ModelViewSet):
         test.published_at = timezone.now()
         test.save()
         return Response({'message': 'Test published successfully'})
+
+    # ✅ NEW - bulk_questions action
+    @action(detail=True, methods=['post'])
+    def bulk_questions(self, request, pk=None):
+        test = self.get_object()
+        questions = request.data.get('questions', [])
+
+        if not questions:
+            return Response(
+                {'error': 'No questions provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        def get_option(options, index):
+            if index < len(options):
+                opt = options[index]
+                if len(opt) > 2 and opt[1] == ')':
+                    return opt[2:].strip()
+                return opt.strip()
+            return ''
+
+        created_count = 0
+        for idx, q_data in enumerate(questions, 1):
+            opts = q_data.get('options', [])
+            Question.objects.create(
+                test=test,
+                question_number=q_data.get('number', idx),
+                question_text=q_data.get('question', ''),
+                option_a=get_option(opts, 0),
+                option_b=get_option(opts, 1),
+                option_c=get_option(opts, 2),
+                option_d=get_option(opts, 3),
+                correct_answer=q_data.get('answer', ''),
+                subject=q_data.get('subject', 'unknown'),
+                question_type=q_data.get('type', 'mcq'),
+                difficulty=q_data.get('difficulty', 'medium'),
+            )
+            created_count += 1
+
+        test.total_questions = created_count
+        test.save()
+
+        return Response({
+            'message': f'{created_count} questions saved successfully!',
+            'total_questions': created_count,
+        }, status=status.HTTP_201_CREATED)
