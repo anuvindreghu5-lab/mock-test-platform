@@ -132,7 +132,7 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://mock-test-exam.netlify.app"
+    "https://rankpilot-8x6.pages.dev"
 ]
 CORS_ALLOW_CREDENTIALS = True
 
