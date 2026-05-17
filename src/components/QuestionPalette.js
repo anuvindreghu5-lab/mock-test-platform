@@ -90,6 +90,10 @@ const QuestionPalette = ({
           <div className="w-3 h-3 bg-gray-200 rounded mr-2"></div>
           <span>Not Visited</span>
         </div>
+         <div className="flex items-center">
+          <div className="w-3 h-3 bg-gray-200 rounded mr-2"></div>
+          <span>Skipped</span>
+        </div>
       </div>
     </div>
   );
