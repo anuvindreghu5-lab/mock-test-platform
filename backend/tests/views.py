@@ -83,6 +83,10 @@ class MockTestViewSet(viewsets.ModelViewSet):
         else:
             skip_gemini = str(skip_gemini_raw).lower() in ('1', 'true', 'yes')
 
+        # Free mode: no Gemini key required (one image per PDF page)
+        if not settings.GEMINI_API_KEY:
+            skip_gemini = True
+
         pdf_path = default_storage.save(f'temp_pdfs/{pdf_file.name}', pdf_file)
         full_pdf_path = os.path.join(settings.MEDIA_ROOT, pdf_path)
         output_dir = os.path.join(settings.MEDIA_ROOT, 'questions', f'test_{test.id}')
@@ -111,6 +115,10 @@ class MockTestViewSet(viewsets.ModelViewSet):
                 image_path = q_data.get('image_abs_path')
                 image_name = q_data.get('image_filename', f'q_{idx}.jpg')
 
+                raw_subject = str(q_data.get('subject', 'unknown')).lower()[:20]
+                valid_subjects = {'english', 'math', 'physics', 'chemistry', 'unknown'}
+                subject = raw_subject if raw_subject in valid_subjects else 'unknown'
+
                 question_kwargs = dict(
                     test=test,
                     question_number=q_data.get('number', idx),
@@ -120,7 +128,7 @@ class MockTestViewSet(viewsets.ModelViewSet):
                     option_c='Option C',
                     option_d='Option D',
                     correct_answer=q_data.get('answer', ''),
-                    subject=q_data.get('subject', 'math')[:20],
+                    subject=subject,
                     question_type=q_data.get('type', 'mcq'),
                     difficulty=q_data.get('difficulty', 'medium'),
                     use_image_display=True,
