@@ -7,9 +7,10 @@ class MockTestListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MockTest
-        fields = ['id', 'title', 'description', 'total_duration_minutes', 
-                  'total_questions', 'difficulty_level', 'category', 'status',
-                  'created_by_username', 'attempts', 'created_at']
+        fields = ['id', 'title', 'description', 'total_duration_minutes',
+                  'total_questions', 'difficulty_level', 'category',
+                  'test_type', 'subject', 'chapter', 'year',
+                  'status', 'created_by_username', 'attempts', 'created_at']
 
 
 class MockTestDetailSerializer(serializers.ModelSerializer):
@@ -26,4 +27,5 @@ class MockTestCreateSerializer(serializers.ModelSerializer):
         model = MockTest
         fields = ['title', 'description', 'total_duration_minutes', 'marks_per_correct',
                   'negative_marking_enabled', 'negative_marks', 'allow_unlimited_time',
-                  'shuffle_questions', 'shuffle_options', 'category', 'difficulty_level']
+                  'shuffle_questions', 'shuffle_options', 'category', 'difficulty_level',
+                  'test_type', 'subject', 'chapter', 'year']
