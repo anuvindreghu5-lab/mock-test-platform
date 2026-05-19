@@ -8,6 +8,7 @@ import io
 import json
 import os
 import re
+import time
 from typing import Dict, List, Optional, Tuple
 
 from PIL import Image
@@ -19,8 +20,46 @@ except ImportError:  # pragma: no cover - surfaced when upload runs
     pdf2image = None  # type: ignore[assignment]
     _convert_from_path = None  # type: ignore[assignment,misc]
 
-GEMINI_MODEL = "gemini-2.0-flash"
+def _django_setting(name: str, default=None):
+    try:
+        from django.conf import settings as dj_settings
+
+        return getattr(dj_settings, name, default)
+    except Exception:
+        return default
+
+
+def _gemini_models_to_try() -> List[str]:
+    primary = os.environ.get("GEMINI_MODEL") or _django_setting(
+        "GEMINI_MODEL", "gemini-2.0-flash-lite"
+    )
+    extra = os.environ.get("GEMINI_MODEL_FALLBACKS") or _django_setting(
+        "GEMINI_MODEL_FALLBACKS",
+        "gemini-2.0-flash-lite,gemini-1.5-flash",
+    )
+    models = [primary] + [m.strip() for m in str(extra).split(",") if m.strip()]
+    seen = set()
+    ordered: List[str] = []
+    for name in models:
+        if name not in seen:
+            seen.add(name)
+            ordered.append(name)
+    return ordered
+
+
+def _skip_gemini() -> bool:
+    if _django_setting("PDF_SKIP_GEMINI", False):
+        return True
+    return os.environ.get("PDF_SKIP_GEMINI", "").lower() in ("1", "true", "yes")
+
+
+def _is_quota_error(exc: BaseException) -> bool:
+    text = str(exc).upper()
+    return "429" in text or "RESOURCE_EXHAUSTED" in text or "QUOTA" in text
+
+
 DPI = 200
+VISION_MAX_SIDE = 1280
 
 _BOX_PROMPT = """
 You are analyzing an exam page image. Each question (stem + options A B C D) must be kept intact.
@@ -94,15 +133,23 @@ def _clean_json(raw: str) -> str:
     return raw.strip()
 
 
-def _gemini_vision(client, pil_img: Image.Image, prompt: str) -> str:
+def _resize_for_vision(pil_img: Image.Image, max_side: int = VISION_MAX_SIDE) -> Image.Image:
+    w, h = pil_img.size
+    if max(w, h) <= max_side:
+        return pil_img
+    scale = max_side / max(w, h)
+    return pil_img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
+
+
+def _gemini_vision_once(client, pil_img: Image.Image, prompt: str, model: str) -> str:
     from google.genai import types
 
     buf = io.BytesIO()
-    pil_img.save(buf, format="JPEG", quality=92)
+    pil_img.save(buf, format="JPEG", quality=85)
     buf.seek(0)
 
     response = client.models.generate_content(
-        model=GEMINI_MODEL,
+        model=model,
         contents=[
             prompt,
             types.Part.from_bytes(data=buf.getvalue(), mime_type="image/jpeg"),
@@ -120,6 +167,31 @@ def _gemini_vision(client, pil_img: Image.Image, prompt: str) -> str:
         return "".join(p.text for p in parts if hasattr(p, "text")).strip()
     except Exception:
         return ""
+
+
+def _gemini_vision(client, pil_img: Image.Image, prompt: str) -> str:
+    """Call Gemini with retries, model fallbacks, and smaller images to save quota."""
+    img = _resize_for_vision(pil_img)
+    last_error: Optional[BaseException] = None
+
+    for model in _gemini_models_to_try():
+        for attempt in range(3):
+            try:
+                return _gemini_vision_once(client, img, prompt, model)
+            except Exception as exc:
+                last_error = exc
+                if not _is_quota_error(exc):
+                    raise
+                wait_s = min(90, 35 * (attempt + 1))
+                print(
+                    f"[PDF Images] Quota/rate limit on {model}, "
+                    f"retry in {wait_s}s (attempt {attempt + 1}/3)"
+                )
+                time.sleep(wait_s)
+
+    if last_error:
+        raise last_error
+    return ""
 
 
 def _parse_json_array(raw: str) -> list:
@@ -214,17 +286,25 @@ def parse_pdf_to_image_questions(
     output_dir: str,
     api_key: Optional[str] = None,
     answer_key_page: str = "last",
+    skip_gemini: Optional[bool] = None,
 ) -> List[Dict]:
     """
     Returns list of dicts ready for Question creation:
     number, subject, question (placeholder), options (labels), answer, image_path (relative to MEDIA)
     """
-    resolved_key = api_key or os.environ.get("GEMINI_API_KEY", "")
-    if not resolved_key:
-        raise ValueError("Missing GEMINI_API_KEY for PDF image extraction")
-
     os.makedirs(output_dir, exist_ok=True)
-    client = _gemini_client(resolved_key)
+    if skip_gemini is None:
+        skip_ai = _skip_gemini()
+    else:
+        skip_ai = skip_gemini
+
+    resolved_key = api_key or os.environ.get("GEMINI_API_KEY", "")
+    if not skip_ai and not resolved_key:
+        raise ValueError("Missing GEMINI_API_KEY for PDF image extraction (or enable free mode)")
+    client = None if skip_ai else _gemini_client(resolved_key)
+    if skip_ai:
+        print("[PDF Images] PDF_SKIP_GEMINI=true — one full-page image per sheet (no API calls)")
+
     pages = _pdf_to_images(pdf_path)
     total = len(pages)
 
@@ -245,22 +325,39 @@ def parse_pdf_to_image_questions(
         answer_img = None
 
     answer_key: Dict[str, str] = {}
-    if answer_img is not None:
+    gemini_quota_exhausted = False
+
+    if answer_img is not None and not skip_ai and client is not None:
         try:
             raw = _gemini_vision(client, answer_img, _ANSWER_KEY_PROMPT)
             parsed = _parse_json_object(raw)
             answer_key = {str(k): str(v).upper().strip()[:1] for k, v in parsed.items()}
         except Exception as exc:
-            print(f"[PDF Images] Answer key parse failed: {exc}")
+            if _is_quota_error(exc):
+                gemini_quota_exhausted = True
+                print(f"[PDF Images] Answer key skipped (quota): {exc}")
+            else:
+                print(f"[PDF Images] Answer key parse failed: {exc}")
 
     results: List[Dict] = []
     q_counter = 0
 
     for page_index, page_img in enumerate(question_pages):
         page_no = page_index + 1
-        boxes = _detect_boxes(client, page_img)
-        if not boxes:
+        if skip_ai or gemini_quota_exhausted:
             boxes = _fallback_page_as_single_question(page_img, page_no)
+        else:
+            try:
+                boxes = _detect_boxes(client, page_img)
+            except Exception as exc:
+                if _is_quota_error(exc):
+                    gemini_quota_exhausted = True
+                    print(f"[PDF Images] Quota hit — using full-page crops for remaining pages")
+                    boxes = _fallback_page_as_single_question(page_img, page_no)
+                else:
+                    raise
+            if not boxes:
+                boxes = _fallback_page_as_single_question(page_img, page_no)
 
         for item in boxes:
             q_counter += 1

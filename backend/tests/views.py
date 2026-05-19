@@ -77,6 +77,11 @@ class MockTestViewSet(viewsets.ModelViewSet):
             )
 
         answer_key_page = request.data.get('answer_key_page', 'last')
+        skip_gemini_raw = request.data.get('skip_gemini', settings.PDF_SKIP_GEMINI)
+        if isinstance(skip_gemini_raw, bool):
+            skip_gemini = skip_gemini_raw
+        else:
+            skip_gemini = str(skip_gemini_raw).lower() in ('1', 'true', 'yes')
 
         pdf_path = default_storage.save(f'temp_pdfs/{pdf_file.name}', pdf_file)
         full_pdf_path = os.path.join(settings.MEDIA_ROOT, pdf_path)
@@ -89,6 +94,7 @@ class MockTestViewSet(viewsets.ModelViewSet):
                 output_dir,
                 api_key=settings.GEMINI_API_KEY,
                 answer_key_page=answer_key_page,
+                skip_gemini=skip_gemini,
             )
 
             if not questions_data:
@@ -130,19 +136,33 @@ class MockTestViewSet(viewsets.ModelViewSet):
             test.total_questions = created_count
             test.save()
 
+            mode_label = 'free_page_images' if skip_gemini else 'ai_cropped_images'
             return Response({
                 'success': True,
                 'message': (
                     f'Saved {created_count} questions as images from PDF '
-                    '(math & symbols preserved).'
+                    + (
+                        '(free mode: one image per page, no AI).'
+                        if skip_gemini
+                        else '(AI box detection; math preserved).'
+                    )
                 ),
                 'total_questions': created_count,
-                'mode': 'image',
+                'mode': mode_label,
             }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
+            err = str(e)
+            if "429" in err or "RESOURCE_EXHAUSTED" in err:
+                err = (
+                    "Gemini API free-tier quota exceeded. Options: (1) Wait 1–2 minutes and retry, "
+                    "(2) Enable billing at https://ai.google.dev/ or use a new API key, "
+                    "(3) On Render set GEMINI_MODEL=gemini-2.0-flash-lite, "
+                    "(4) Set PDF_SKIP_GEMINI=true to upload without AI (one question per page). "
+                    f"Details: {err[:400]}"
+                )
             return Response(
-                {'error': f'PDF processing failed: {str(e)}'},
+                {'error': f'PDF processing failed: {err}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         finally:
