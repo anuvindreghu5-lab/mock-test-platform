@@ -14,15 +14,19 @@ SECRET_KEY = os.getenv("SECRET_KEY", "fallback-local-dev-key-change-this")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 DEBUG = os.getenv("DEBUG", "False") == "True"
+if os.getenv("LOCAL_DEV", "").lower() in ("1", "true", "yes"):
+    DEBUG = True
 
 ALLOWED_HOSTS = [
     "mock-test-platform-2scg.onrender.com",
     "localhost",
-    "127.0.0.1"
+    "127.0.0.1",
 ]
 
 CSRF_TRUSTED_ORIGINS = [
-    "https://mock-test-platform-2scg.onrender.com"
+    "https://mock-test-platform-2scg.onrender.com",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
 ]
 
 INSTALLED_APPS = [
@@ -132,13 +136,17 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://rankaura.netlify.app"
+    "https://rankaura.netlify.app",
 ]
 CORS_ALLOW_CREDENTIALS = True
 
-# ✅ File Upload Limits (5MB)
-FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880
-DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880
+# Allow any origin when running locally (npm start → localhost:3000)
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+
+# PDF uploads (up to 25MB)
+FILE_UPLOAD_MAX_MEMORY_SIZE = 26214400
+DATA_UPLOAD_MAX_MEMORY_SIZE = 26214400
 
 # Add at bottom of settings.py
 CONN_MAX_AGE = 60  # database connection pooling

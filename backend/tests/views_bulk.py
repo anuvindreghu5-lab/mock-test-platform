@@ -65,71 +65,27 @@ class BulkQuestionUploadView(APIView):
                     []
                 )
 
+                def get_option(options, index):
+                    if index < len(options):
+                        opt = options[index]
+                        if len(opt) > 2 and opt[1] == ")":
+                            return opt[2:].strip()
+                        return str(opt).strip()
+                    return ""
+
                 Question.objects.create(
-
-                    # TEST
                     test=test,
-
-                    # QUESTION NUMBER
-                    question_number=q.get(
-                        "number",
-                        created + 1
-                    ),
-
-                    # SUBJECT
-                    subject=q.get(
-                        "subject",
-                        "math"
-                    ),
-
-                    # QUESTION TEXT
-                    question_text=q.get(
-                        "question",
-                        ""
-                    ),
-
-                    # OPTIONS
-                    option_a=(
-                        options[0]
-                        if len(options) > 0
-                        else ""
-                    ),
-
-                    option_b=(
-                        options[1]
-                        if len(options) > 1
-                        else ""
-                    ),
-
-                    option_c=(
-                        options[2]
-                        if len(options) > 2
-                        else ""
-                    ),
-
-                    option_d=(
-                        options[3]
-                        if len(options) > 3
-                        else ""
-                    ),
-
-                    # ANSWER
-                    correct_answer=q.get(
-                        "answer",
-                        ""
-                    ),
-
-                    # TYPE
-                    question_type=q.get(
-                        "type",
-                        "mcq"
-                    ),
-
-                    # DIFFICULTY
-                    difficulty=q.get(
-                        "difficulty",
-                        "medium"
-                    ),
+                    question_number=q.get("number", created + 1),
+                    subject=q.get("subject", "math"),
+                    question_text=q.get("question", ""),
+                    option_a=get_option(options, 0),
+                    option_b=get_option(options, 1),
+                    option_c=get_option(options, 2),
+                    option_d=get_option(options, 3),
+                    correct_answer=q.get("answer", ""),
+                    question_type=q.get("type", "mcq"),
+                    difficulty=q.get("difficulty", "medium"),
+                    use_image_display=bool(q.get("use_image_display", False)),
                 )
 
                 created += 1

@@ -13,7 +13,8 @@ from .serializers import (
     MockTestListSerializer, MockTestDetailSerializer, MockTestCreateSerializer
 )
 from questions.models import Question
-from questions.pdf_parser import parse_pdf
+from questions.pdf_parser_images import parse_pdf_to_image_questions
+from django.core.files import File
 from utils.permissions import IsAdminUser, IsOwnerOrAdmin
 
 class MockTestViewSet(viewsets.ModelViewSet):
@@ -52,8 +53,14 @@ class MockTestViewSet(viewsets.ModelViewSet):
         serializer = MockTestListSerializer(tests, many=True)
         return Response(serializer.data)
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
+
     @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
     def upload_pdf(self, request, pk=None):
+        """Upload PDF — saves each question as an image crop (preserves maths)."""
         test = self.get_object()
 
         if 'pdf_file' not in request.FILES:
@@ -63,39 +70,61 @@ class MockTestViewSet(viewsets.ModelViewSet):
             )
 
         pdf_file = request.FILES['pdf_file']
+        if not pdf_file.name.lower().endswith('.pdf'):
+            return Response(
+                {'error': 'Only PDF files are supported'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        answer_key_page = request.data.get('answer_key_page', 'last')
+
         pdf_path = default_storage.save(f'temp_pdfs/{pdf_file.name}', pdf_file)
-        full_path = os.path.join(settings.MEDIA_ROOT, pdf_path)
+        full_pdf_path = os.path.join(settings.MEDIA_ROOT, pdf_path)
+        output_dir = os.path.join(settings.MEDIA_ROOT, 'questions', f'test_{test.id}')
+        os.makedirs(output_dir, exist_ok=True)
 
         try:
-            questions_data = parse_pdf(full_path)
+            questions_data = parse_pdf_to_image_questions(
+                full_pdf_path,
+                output_dir,
+                api_key=settings.GEMINI_API_KEY,
+                answer_key_page=answer_key_page,
+            )
 
             if not questions_data:
                 return Response(
-                    {'error': 'No questions could be parsed from the PDF'},
+                    {'error': 'No questions detected in PDF. Try a clearer scan or different answer-key setting.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            def get_option(options, index):
-                if index < len(options):
-                    return options[index].split(') ', 1)[-1].strip()
-                return ''
+            # Replace existing questions for this test when uploading PDF
+            Question.objects.filter(test=test).delete()
 
             created_count = 0
             for idx, q_data in enumerate(questions_data, 1):
-                opts = q_data.get('options', [])
-                Question.objects.create(
+                image_path = q_data.get('image_abs_path')
+                image_name = q_data.get('image_filename', f'q_{idx}.jpg')
+
+                question_kwargs = dict(
                     test=test,
                     question_number=q_data.get('number', idx),
-                    question_text=q_data.get('question', ''),
-                    option_a=get_option(opts, 0),
-                    option_b=get_option(opts, 1),
-                    option_c=get_option(opts, 2),
-                    option_d=get_option(opts, 3),
+                    question_text=q_data.get('question', f'Question {idx}'),
+                    option_a='Option A',
+                    option_b='Option B',
+                    option_c='Option C',
+                    option_d='Option D',
                     correct_answer=q_data.get('answer', ''),
-                    subject=q_data.get('subject', 'unknown'),
+                    subject=q_data.get('subject', 'math')[:20],
                     question_type=q_data.get('type', 'mcq'),
                     difficulty=q_data.get('difficulty', 'medium'),
+                    use_image_display=True,
                 )
+
+                if image_path and os.path.isfile(image_path):
+                    with open(image_path, 'rb') as img_file:
+                        question_kwargs['question_image'] = File(img_file, name=image_name)
+
+                Question.objects.create(**question_kwargs)
                 created_count += 1
 
             test.total_questions = created_count
@@ -103,13 +132,17 @@ class MockTestViewSet(viewsets.ModelViewSet):
 
             return Response({
                 'success': True,
-                'message': f'Successfully parsed {created_count} questions',
+                'message': (
+                    f'Saved {created_count} questions as images from PDF '
+                    '(math & symbols preserved).'
+                ),
                 'total_questions': created_count,
+                'mode': 'image',
             }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
             return Response(
-                {'error': str(e)},
+                {'error': f'PDF processing failed: {str(e)}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         finally:

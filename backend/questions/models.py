@@ -63,7 +63,35 @@ class Question(models.Model):
         default="unknown"
     )
 
-    question_text = models.TextField()
+    question_text = models.TextField(blank=True)
+
+    # PDF image mode — preserves maths / matrices / trig from original PDF
+    use_image_display = models.BooleanField(default=False)
+    question_image = models.ImageField(
+        upload_to="questions/%Y/%m/",
+        blank=True,
+        null=True,
+    )
+    option_a_image = models.ImageField(
+        upload_to="questions/%Y/%m/",
+        blank=True,
+        null=True,
+    )
+    option_b_image = models.ImageField(
+        upload_to="questions/%Y/%m/",
+        blank=True,
+        null=True,
+    )
+    option_c_image = models.ImageField(
+        upload_to="questions/%Y/%m/",
+        blank=True,
+        null=True,
+    )
+    option_d_image = models.ImageField(
+        upload_to="questions/%Y/%m/",
+        blank=True,
+        null=True,
+    )
 
     # OPTIONS
 

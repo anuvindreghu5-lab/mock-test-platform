@@ -11,7 +11,7 @@ import json
 
 from typing import Dict, List, Optional
 
-#from pdf2image import convert_from_path
+from .pdf_parser_images import _pdf_to_images
 
 
 # ─────────────────────────────────────────────
@@ -222,13 +222,8 @@ def _run_vision(
         resolved_key
     )
 
-    # PDF → image
-    images = convert_from_path(
-        pdf_path,
-        dpi=DPI,
-        fmt="jpeg",
-        poppler_path="/opt/homebrew/bin"
-    )
+    # PDF → image (shared helper; requires pdf2image + poppler)
+    images = _pdf_to_images(pdf_path, dpi=DPI)
 
     total_pages = len(images)
 
