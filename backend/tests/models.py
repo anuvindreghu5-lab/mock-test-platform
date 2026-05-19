@@ -9,11 +9,19 @@ class MockTest(models.Model):
         ('published', 'Published'),
         ('archived', 'Archived'),
     )
-    
+
+    TEST_TYPE_CHOICES = [
+        ('latest', 'Latest Tests'),
+        ('pyq', 'Previous Year Questions'),
+        ('subject', 'Subject Wise'),
+        ('chapter', 'Chapter Wise'),
+        ('full', 'Full Mock Test'),
+    ]
+
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_tests')
-    
+
     # Test Configuration
     total_duration_minutes = models.IntegerField(default=60)
     marks_per_correct = models.IntegerField(default=4)
@@ -22,21 +30,28 @@ class MockTest(models.Model):
     allow_unlimited_time = models.BooleanField(default=False)
     shuffle_questions = models.BooleanField(default=True)
     shuffle_options = models.BooleanField(default=True)
-    
+    passing_marks = models.FloatField(default=35.0)
+
     # Test Status
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
     category = models.CharField(max_length=100, blank=True)
     difficulty_level = models.CharField(
-        max_length=10, 
+        max_length=10,
         choices=[('easy', 'Easy'), ('medium', 'Medium'), ('hard', 'Hard')],
         default='medium'
     )
-    
+
+    # ✅ New fields
+    test_type = models.CharField(max_length=20, choices=TEST_TYPE_CHOICES, default='full', blank=True)
+    subject = models.CharField(max_length=100, blank=True)
+    chapter = models.CharField(max_length=100, blank=True)
+    year = models.IntegerField(null=True, blank=True)
+
     # Statistics
     total_questions = models.IntegerField(default=0)
     attempts = models.IntegerField(default=0)
     pass_percentage = models.FloatField(default=0)
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     published_at = models.DateTimeField(null=True, blank=True)
