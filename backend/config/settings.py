@@ -121,7 +121,7 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
+PDF_SKIP_GEMINI = os.getenv("PDF_SKIP_GEMINI", "False") == "True"
 # ✅ REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (

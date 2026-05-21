@@ -2,6 +2,7 @@
 Extract questions from exam PDFs as image crops (not OCR text).
 
 Preserves matrices, trigonometry, limits, fractions, etc. exactly as printed.
+Uses PyMuPDF instead of pdf2image — no poppler needed on Render!
 """
 
 import io
@@ -9,21 +10,26 @@ import json
 import os
 import re
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 from PIL import Image
 
-try:
-    import pdf2image
-    from pdf2image import convert_from_path as _convert_from_path
-except ImportError:  # pragma: no cover - surfaced when upload runs
-    pdf2image = None  # type: ignore[assignment]
-    _convert_from_path = None  # type: ignore[assignment,misc]
+
+# ─────────────────────────────────────────────
+# CONFIG
+# ─────────────────────────────────────────────
+
+DPI = 200
+VISION_MAX_SIDE = 1280
+
+
+# ─────────────────────────────────────────────
+# DJANGO SETTINGS HELPER
+# ─────────────────────────────────────────────
 
 def _django_setting(name: str, default=None):
     try:
         from django.conf import settings as dj_settings
-
         return getattr(dj_settings, name, default)
     except Exception:
         return default
@@ -58,8 +64,37 @@ def _is_quota_error(exc: BaseException) -> bool:
     return "429" in text or "RESOURCE_EXHAUSTED" in text or "QUOTA" in text
 
 
-DPI = 200
-VISION_MAX_SIDE = 1280
+# ─────────────────────────────────────────────
+# PDF TO IMAGES — PyMuPDF (no poppler needed!)
+# ─────────────────────────────────────────────
+
+def _pdf_to_images(pdf_path: str, dpi: int = DPI) -> List[Image.Image]:
+    """Convert PDF pages to PIL Images using PyMuPDF — works on Render free tier!"""
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        raise ImportError(
+            "PyMuPDF is required. Install with: pip install pymupdf"
+        )
+
+    doc = fitz.open(pdf_path)
+    images = []
+    zoom = dpi / 72  # 72 is default PDF DPI
+    mat = fitz.Matrix(zoom, zoom)
+
+    for page in doc:
+        pix = page.get_pixmap(matrix=mat)
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        images.append(img)
+
+    doc.close()
+    print(f"[PDF Images] Converted {len(images)} pages using PyMuPDF")
+    return images
+
+
+# ─────────────────────────────────────────────
+# PROMPTS
+# ─────────────────────────────────────────────
 
 _BOX_PROMPT = """
 You are analyzing an exam page image. Each question (stem + options A B C D) must be kept intact.
@@ -92,38 +127,12 @@ Use uppercase letters A–D only. No markdown.
 """
 
 
-def _detect_poppler_path() -> Optional[str]:
-    env = os.environ.get("POPPLER_PATH")
-    if env and os.path.isdir(env):
-        return env
-    for candidate in (
-        "/opt/homebrew/bin",
-        "/usr/local/bin",
-        "/usr/bin",
-    ):
-        if os.path.isfile(os.path.join(candidate, "poppler", "pdftoppm")) or os.path.isfile(
-            os.path.join(candidate, "pdftoppm")
-        ):
-            return candidate
-    return None
-
-
-def _pdf_to_images(pdf_path: str, dpi: int = DPI) -> List[Image.Image]:
-    if pdf2image is None:
-        raise ImportError(
-            "pdf2image is required for PDF upload. Install it with: pip install pdf2image"
-        )
-
-    kwargs = {"dpi": dpi, "fmt": "jpeg"}
-    poppler = _detect_poppler_path()
-    if poppler:
-        kwargs["poppler_path"] = poppler
-    return _convert_from_path(pdf_path, **kwargs)
-
+# ─────────────────────────────────────────────
+# GEMINI CLIENT
+# ─────────────────────────────────────────────
 
 def _gemini_client(api_key: str):
     from google import genai
-
     return genai.Client(api_key=api_key)
 
 
@@ -194,6 +203,10 @@ def _gemini_vision(client, pil_img: Image.Image, prompt: str) -> str:
     return ""
 
 
+# ─────────────────────────────────────────────
+# JSON PARSERS
+# ─────────────────────────────────────────────
+
 def _parse_json_array(raw: str) -> list:
     raw = _clean_json(raw)
     if not raw:
@@ -235,6 +248,10 @@ def _parse_json_object(raw: str) -> dict:
             pass
     return {}
 
+
+# ─────────────────────────────────────────────
+# BOX DETECTION
+# ─────────────────────────────────────────────
 
 def _crop_box(img: Image.Image, box: dict, padding: int = 8) -> Image.Image:
     w, h = img.size
@@ -281,6 +298,10 @@ def _fallback_page_as_single_question(page_img: Image.Image, page_num: int) -> L
     ]
 
 
+# ─────────────────────────────────────────────
+# MAIN FUNCTION
+# ─────────────────────────────────────────────
+
 def parse_pdf_to_image_questions(
     pdf_path: str,
     output_dir: str,
@@ -289,10 +310,11 @@ def parse_pdf_to_image_questions(
     skip_gemini: Optional[bool] = None,
 ) -> List[Dict]:
     """
-    Returns list of dicts ready for Question creation:
-    number, subject, question (placeholder), options (labels), answer, image_path (relative to MEDIA)
+    Returns list of dicts ready for Question creation.
+    Uses PyMuPDF — no poppler needed on Render!
     """
     os.makedirs(output_dir, exist_ok=True)
+
     if skip_gemini is None:
         skip_ai = _skip_gemini()
     else:
@@ -300,17 +322,21 @@ def parse_pdf_to_image_questions(
 
     resolved_key = api_key or os.environ.get("GEMINI_API_KEY", "")
     if not skip_ai and not resolved_key:
-        raise ValueError("Missing GEMINI_API_KEY for PDF image extraction (or enable free mode)")
-    client = None if skip_ai else _gemini_client(resolved_key)
-    if skip_ai:
-        print("[PDF Images] PDF_SKIP_GEMINI=true — one full-page image per sheet (no API calls)")
+        raise ValueError("Missing GEMINI_API_KEY (or enable free mode)")
 
-    pages = _pdf_to_images(pdf_path)
+    client = None if skip_ai else _gemini_client(resolved_key)
+
+    if skip_ai:
+        print("[PDF Images] Free mode — one full-page image per sheet (no API calls)")
+
+    # ── Convert PDF to images ──
+    pages = _pdf_to_images(pdf_path, dpi=DPI)
     total = len(pages)
 
     if total == 0:
         return []
 
+    # ── Split question pages and answer key page ──
     if total == 1:
         question_pages = pages
         answer_img = None
@@ -324,6 +350,7 @@ def parse_pdf_to_image_questions(
         question_pages = pages
         answer_img = None
 
+    # ── Extract answer key ──
     answer_key: Dict[str, str] = {}
     gemini_quota_exhausted = False
 
@@ -332,6 +359,7 @@ def parse_pdf_to_image_questions(
             raw = _gemini_vision(client, answer_img, _ANSWER_KEY_PROMPT)
             parsed = _parse_json_object(raw)
             answer_key = {str(k): str(v).upper().strip()[:1] for k, v in parsed.items()}
+            print(f"[PDF Images] Answer key: {len(answer_key)} entries")
         except Exception as exc:
             if _is_quota_error(exc):
                 gemini_quota_exhausted = True
@@ -339,11 +367,13 @@ def parse_pdf_to_image_questions(
             else:
                 print(f"[PDF Images] Answer key parse failed: {exc}")
 
+    # ── Process each page ──
     results: List[Dict] = []
     q_counter = 0
 
     for page_index, page_img in enumerate(question_pages):
         page_no = page_index + 1
+
         if skip_ai or gemini_quota_exhausted:
             boxes = _fallback_page_as_single_question(page_img, page_no)
         else:
@@ -352,7 +382,7 @@ def parse_pdf_to_image_questions(
             except Exception as exc:
                 if _is_quota_error(exc):
                     gemini_quota_exhausted = True
-                    print(f"[PDF Images] Quota hit — using full-page crops for remaining pages")
+                    print(f"[PDF Images] Quota hit — using full-page crops")
                     boxes = _fallback_page_as_single_question(page_img, page_no)
                 else:
                     raise
@@ -372,31 +402,27 @@ def parse_pdf_to_image_questions(
             abs_path = os.path.join(output_dir, rel_name)
             crop.save(abs_path, "JPEG", quality=92)
 
-            rel_media = os.path.relpath(abs_path, start=os.path.dirname(output_dir))
-            # store path relative to MEDIA_ROOT subfolder test_{id}
-            image_rel = rel_name
-
             ans = answer_key.get(str(num), "")
 
-            results.append(
-                {
-                    "number": num,
-                    "subject": str(item.get("subject", "math")).lower()[:20],
-                    "question": f"Question {num} (see image)",
-                    "options": [],
-                    "type": "mcq",
-                    "answer": ans,
-                    "image_filename": rel_name,
-                    "image_abs_path": abs_path,
-                    "use_image_display": True,
-                }
-            )
+            results.append({
+                "number": num,
+                "subject": str(item.get("subject", "math")).lower()[:20],
+                "question": f"Question {num} (see image)",
+                "options": [],
+                "type": "mcq",
+                "answer": ans,
+                "image_filename": rel_name,
+                "image_abs_path": abs_path,
+                "use_image_display": True,
+            })
 
-    # dedupe by number — keep largest image path
+    # ── Deduplicate by number ──
     by_num: Dict[int, dict] = {}
     for q in results:
         n = q["number"]
         if n not in by_num:
             by_num[n] = q
+
     final = [by_num[k] for k in sorted(by_num.keys())]
+    print(f"[PDF Images] Total questions extracted: {len(final)}")
     return final
