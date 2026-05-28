@@ -6,6 +6,7 @@ from django.utils import timezone
 from django.core.files.storage import default_storage
 from django.conf import settings
 import os
+import re
 from rest_framework.permissions import AllowAny
 
 from .models import MockTest
@@ -14,12 +15,32 @@ from .serializers import (
 )
 from questions.models import Question
 from questions.pdf_parser_images import parse_pdf_to_image_questions
-from django.core.files import File
+from django.core.files.base import ContentFile
 from utils.permissions import IsAdminUser, IsOwnerOrAdmin
+
+
+def _normalize_correct_answer(raw_answer):
+    if not isinstance(raw_answer, str):
+        return ""
+
+    answer = raw_answer.strip().upper()
+    answer = re.sub(r"^(?:OPTION|OPT|ANSWER)\b[\s\)\.:\-]*", "", answer, flags=re.IGNORECASE).strip()
+    answer = re.sub(r"^[\(\)\.:\-\s]+", "", answer)
+
+    match = re.search(r"\b([A-D])\b", answer)
+    return match.group(1) if match else ""
+
 
 class MockTestViewSet(viewsets.ModelViewSet):
     queryset = MockTest.objects.all()
     permission_classes = [AllowAny]
+
+    def get_permissions(self):
+        if self.action in ['upload_pdf', 'publish']:
+            return [IsAdminUser()]
+        if self.action in ['create', 'my_tests', 'bulk_questions']:
+            return [IsAuthenticated()]
+        return [AllowAny()]
 
     def get_serializer_class(self):
         if self.action == 'retrieve':
@@ -115,28 +136,45 @@ class MockTestViewSet(viewsets.ModelViewSet):
                 image_path = q_data.get('image_abs_path')
                 image_name = q_data.get('image_filename', f'q_{idx}.jpg')
 
-                raw_subject = str(q_data.get('subject', 'unknown')).lower()[:20]
-                valid_subjects = {'english', 'math', 'physics', 'chemistry', 'unknown'}
-                subject = raw_subject if raw_subject in valid_subjects else 'unknown'
+                raw_subject = str(q_data.get('subject', 'unknown')).lower().strip()
+                subject = raw_subject if raw_subject else 'unknown'
+                options = (q_data.get('options') or ['', '', '', ''])[:4]
+                options += [''] * (4 - len(options))
 
                 question_kwargs = dict(
                     test=test,
                     question_number=q_data.get('number', idx),
                     question_text=q_data.get('question', f'Question {idx}'),
-                    option_a='Option A',
-                    option_b='Option B',
-                    option_c='Option C',
-                    option_d='Option D',
-                    correct_answer=q_data.get('answer', ''),
+                    option_a=options[0],
+                    option_b=options[1],
+                    option_c=options[2],
+                    option_d=options[3],
+                    correct_answer=_normalize_correct_answer(q_data.get('answer', '')),
                     subject=subject,
                     question_type=q_data.get('type', 'mcq'),
                     difficulty=q_data.get('difficulty', 'medium'),
-                    use_image_display=True,
+                    use_image_display=q_data.get('use_image_display', True),
                 )
 
                 if image_path and os.path.isfile(image_path):
                     with open(image_path, 'rb') as img_file:
-                        question_kwargs['question_image'] = File(img_file, name=image_name)
+                        question_kwargs['question_image'] = ContentFile(
+                            img_file.read(),
+                            name=image_name,
+                        )
+
+                for opt in ['a', 'b', 'c', 'd']:
+                    opt_image_path = q_data.get(f'option_{opt}_image_abs_path')
+                    opt_image_name = q_data.get(
+                        f'option_{opt}_image_filename',
+                        f'q_{idx}_opt_{opt}.jpg'
+                    )
+                    if opt_image_path and os.path.isfile(opt_image_path):
+                        with open(opt_image_path, 'rb') as opt_file:
+                            question_kwargs[f'option_{opt}_image'] = ContentFile(
+                                opt_file.read(),
+                                name=opt_image_name,
+                            )
 
                 Question.objects.create(**question_kwargs)
                 created_count += 1
@@ -148,9 +186,9 @@ class MockTestViewSet(viewsets.ModelViewSet):
             return Response({
                 'success': True,
                 'message': (
-                    f'Saved {created_count} questions as images from PDF '
+                    f'Saved {created_count} questions from PDF '
                     + (
-                        '(free mode: one image per page, no AI).'
+                        '(free mode: text questions use text/options; math or diagram questions keep images).'
                         if skip_gemini
                         else '(AI box detection; math preserved).'
                     )
@@ -216,7 +254,7 @@ class MockTestViewSet(viewsets.ModelViewSet):
                 option_b=get_option(opts, 1),
                 option_c=get_option(opts, 2),
                 option_d=get_option(opts, 3),
-                correct_answer=q_data.get('answer', ''),
+                correct_answer=_normalize_correct_answer(q_data.get('answer', '')),
                 subject=q_data.get('subject', 'unknown'),
                 question_type=q_data.get('type', 'mcq'),
                 difficulty=q_data.get('difficulty', 'medium'),

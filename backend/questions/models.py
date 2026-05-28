@@ -12,11 +12,15 @@ class Question(models.Model):
     # ─────────────────────────────
 
     SUBJECT_CHOICES = [
-
-        ("english", "English"),
         ("math", "Mathematics"),
-        ("physics", "Physics"),
-        ("chemistry", "Chemistry"),
+        ("english", "English"),
+        ("engineering mechanics", "Engineering Mechanics"),
+        ("engineering graphics", "Engineering Graphics"),
+        ("general engineering civil", "General Engineering (Civil)"),
+        ("general engineering mechanical", "General Engineering (Mechanical)"),
+        ("general engineering computer", "General Engineering (Computer)"),
+        ("general engineering electrical", "General Engineering (Electrical)"),
+        ("general engineering electronics", "General Engineering (Electronics)"),
         ("unknown", "Unknown"),
     ]
 
@@ -58,7 +62,7 @@ class Question(models.Model):
     question_number = models.IntegerField()
 
     subject = models.CharField(
-        max_length=20,
+        max_length=50,
         choices=SUBJECT_CHOICES,
         default="unknown"
     )

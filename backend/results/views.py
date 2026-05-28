@@ -131,8 +131,14 @@ class ResultViewSet(viewsets.ViewSet):
                 'question_id'
             )
 
-            selected_answer = answer_data.get(
+            selected_answer_raw = answer_data.get(
                 'selected_answer'
+            )
+
+            selected_answer = (
+                selected_answer_raw.strip().upper()
+                if isinstance(selected_answer_raw, str)
+                else selected_answer_raw
             )
 
             time_spent = answer_data.get(
@@ -156,13 +162,17 @@ class ResultViewSet(viewsets.ViewSet):
 
             is_correct = False
 
-
+            normalized_correct_answer = (
+                question.correct_answer.strip().upper()
+                if isinstance(question.correct_answer, str)
+                else question.correct_answer
+            )
 
             if selected_answer:
 
                 is_correct = (
                     selected_answer ==
-                    question.correct_answer
+                    normalized_correct_answer
                 )
 
                 if is_correct:

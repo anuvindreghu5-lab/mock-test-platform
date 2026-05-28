@@ -21,8 +21,10 @@ GEMINI_MODEL_FALLBACKS = os.getenv(
 # If true: one question image per PDF page (no Gemini — 100% free, no API quota)
 PDF_SKIP_GEMINI = os.getenv("PDF_SKIP_GEMINI", "True") == "True"
 
+LOCAL_DEV = os.getenv("LOCAL_DEV", "").lower() in ("1", "true", "yes")
+
 DEBUG = os.getenv("DEBUG", "False") == "True"
-if os.getenv("LOCAL_DEV", "").lower() in ("1", "true", "yes"):
+if LOCAL_DEV:
     DEBUG = True
 
 ALLOWED_HOSTS = [
@@ -92,13 +94,21 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-DATABASES = {
-    'default': dj_database_url.config(
-        default=os.getenv("DATABASE_URL"),
-        conn_max_age=600,
-        ssl_require=False,
-    )
-}
+if LOCAL_DEV and os.getenv("USE_REMOTE_DATABASE", "").lower() not in ("1", "true", "yes"):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
+else:
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=os.getenv("DATABASE_URL"),
+            conn_max_age=600,
+            ssl_require=False,
+        )
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
@@ -144,6 +154,12 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:8787",
+    "http://127.0.0.1:8787",
     "https://rankaura.netlify.app",
 ]
 CORS_ALLOW_CREDENTIALS = True
