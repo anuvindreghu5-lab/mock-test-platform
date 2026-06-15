@@ -37,6 +37,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://mock-test-platform-2scg.onrender.com",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://rankaura.netlify.app",
 ]
 
 INSTALLED_APPS = [
