@@ -52,10 +52,20 @@ def _gemini_models_to_try() -> List[str]:
         m.strip() for m in str(extra).split(",") if m.strip()
     ]
 
+    # Map deprecated/failing models to working ones
+    mapped_models = []
+    for m in models:
+        name = m.lower().strip()
+        if name == "gemini-1.5-flash":
+            name = "gemini-flash-latest"
+        elif name == "models/gemini-1.5-flash":
+            name = "models/gemini-flash-latest"
+        mapped_models.append(name)
+
     seen = set()
     ordered = []
 
-    for name in models:
+    for name in mapped_models:
         if name not in seen:
             seen.add(name)
             ordered.append(name)

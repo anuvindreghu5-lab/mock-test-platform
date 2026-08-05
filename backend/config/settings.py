@@ -16,7 +16,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite")
 GEMINI_MODEL_FALLBACKS = os.getenv(
     "GEMINI_MODEL_FALLBACKS",
-    "gemini-2.0-flash-lite,gemini-1.5-flash",
+    "gemini-2.0-flash,gemini-2.0-flash-lite,gemini-flash-latest",
 )
 # If true: one question image per PDF page (no Gemini — 100% free, no API quota)
 PDF_SKIP_GEMINI = os.getenv("PDF_SKIP_GEMINI", "True") == "True"
