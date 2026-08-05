@@ -761,8 +761,9 @@ CRITICAL INSTRUCTIONS:
 # ─────────────────────────────────────────────
 
 def _gemini_client(api_key: str):
-    from google import genai
-    return genai.Client(api_key=api_key)
+    import google.generativeai as old_genai
+    old_genai.configure(api_key=api_key)
+    return old_genai
 
 
 def _clean_json(raw: str) -> str:
@@ -802,37 +803,20 @@ def _gemini_vision_once(
     prompt: str,
     model: str
 ) -> str:
+    config = {
+        "temperature": 0,
+        "max_output_tokens": 8192,
+    }
 
-    from google.genai import types
-
-    buf = io.BytesIO()
-
-    pil_img.save(
-        buf,
-        format="JPEG",
-        quality=85
+    model_instance = client.GenerativeModel(
+        model_name=model,
+        generation_config=config
     )
 
-    buf.seek(0)
-
-    response = client.models.generate_content(
-        model=model,
-        contents=[
-            prompt,
-            types.Part.from_bytes(
-                data=buf.getvalue(),
-                mime_type="image/jpeg"
-            ),
-        ],
-        config={
-            "temperature": 0,
-            "max_output_tokens": 8192
-        },
-    )
+    response = model_instance.generate_content([prompt, pil_img])
 
     try:
         return (response.text or "").strip()
-
     except Exception:
         return ""
 
