@@ -167,7 +167,7 @@ const AdminUpload = () => {
       form.append("skip_gemini", freePdfMode ? "true" : "false");
 
       const response = await api.post(`/tests/${testId}/upload_pdf/`, form, {
-        timeout: 300000,
+        timeout: 600000,
       });
 
       setMessage(
