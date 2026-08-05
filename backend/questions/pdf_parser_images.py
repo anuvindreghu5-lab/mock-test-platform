@@ -1115,15 +1115,21 @@ def parse_pdf_to_image_questions(
 
     client = None if skip_ai else _gemini_client(resolved_key)
 
-    pages = _pdf_to_images(
-        pdf_path,
-        dpi=DPI
-    )
-
-    total = len(pages)
+    import fitz
+    doc = fitz.open(pdf_path)
+    total = len(doc)
 
     if total == 0:
+        doc.close()
         return []
+
+    def render_page_img(page_idx):
+        zoom = DPI / 72
+        mat = fitz.Matrix(zoom, zoom)
+        page = doc[page_idx]
+        pix = page.get_pixmap(matrix=mat)
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        return img
 
     answer_key_index = None
     if total > 1:
@@ -1137,16 +1143,9 @@ def parse_pdf_to_image_questions(
         answer_key_page
     )
 
-    question_pages = [
-        pages[index]
-        for index in question_page_indices
-    ]
-
-    answer_key_image = (
-        pages[answer_key_index]
-        if answer_key_index is not None and answer_key_index < total
-        else None
-    )
+    answer_key_image = None
+    if answer_key_index is not None and answer_key_index < total:
+        answer_key_image = render_page_img(answer_key_index)
 
     text_boxes_by_page = (
         _detect_text_question_boxes(
@@ -1174,16 +1173,17 @@ def parse_pdf_to_image_questions(
                 client,
                 answer_key_image,
             )
+        # Free memory immediately
+        answer_key_image = None
 
     results = []
 
     q_counter = 0
 
-    for page_index, page_img in enumerate(question_pages):
-
-        original_page_index = question_page_indices[page_index]
+    for original_page_index in question_page_indices:
 
         page_no = original_page_index + 1
+        page_img = render_page_img(original_page_index)
 
         if skip_ai:
 
@@ -1374,6 +1374,8 @@ def parse_pdf_to_image_questions(
                 except Exception:
                     pass
             results.append(q_data)
+        # Clear the page image from memory
+        page_img = None
 
     # Pass 2: Resolve dominant subject for fallback questions
     subject_counts = {}
@@ -1420,4 +1422,5 @@ def parse_pdf_to_image_questions(
         f"[PDF Images] Total questions extracted: {len(final)}"
     )
 
+    doc.close()
     return final
