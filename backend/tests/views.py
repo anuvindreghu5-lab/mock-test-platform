@@ -17,6 +17,106 @@ from questions.models import Question
 from questions.pdf_parser_images import parse_pdf_to_image_questions
 from django.core.files.base import ContentFile
 from utils.permissions import IsAdminUser, IsOwnerOrAdmin
+import threading
+
+
+def _process_pdf_in_background(
+    pdf_path,
+    full_pdf_path,
+    output_dir,
+    api_key,
+    answer_key_page,
+    skip_gemini,
+    test_id
+):
+    try:
+        from questions.pdf_parser_images import parse_pdf_to_image_questions
+        from questions.models import Question
+        from tests.models import MockTest
+        from django.core.files.base import ContentFile
+        import os
+
+        test = MockTest.objects.filter(id=test_id).first()
+        if not test:
+            print(f"[BG THREAD] Test {test_id} not found.")
+            return
+
+        questions_data = parse_pdf_to_image_questions(
+            full_pdf_path,
+            output_dir,
+            api_key=api_key,
+            answer_key_page=answer_key_page,
+            skip_gemini=skip_gemini,
+        )
+
+        if not questions_data:
+            print(f"[BG THREAD] No questions detected in PDF for test {test_id}.")
+            return
+
+        # Replace existing questions for this test when uploading PDF
+        Question.objects.filter(test=test).delete()
+
+        created_count = 0
+        for idx, q_data in enumerate(questions_data, 1):
+            image_path = q_data.get('image_abs_path')
+            image_name = q_data.get('image_filename', f'q_{idx}.jpg')
+
+            raw_subject = str(q_data.get('subject', 'unknown')).lower().strip()
+            subject = raw_subject if raw_subject else 'unknown'
+            options = (q_data.get('options') or ['', '', '', ''])[:4]
+            options += [''] * (4 - len(options))
+
+            question_kwargs = dict(
+                test=test,
+                question_number=q_data.get('number', idx),
+                question_text=q_data.get('question', f'Question {idx}'),
+                option_a=options[0],
+                option_b=options[1],
+                option_c=options[2],
+                option_d=options[3],
+                correct_answer=_normalize_correct_answer(q_data.get('answer', '')),
+                subject=subject,
+                question_type=q_data.get('type', 'mcq'),
+                difficulty=q_data.get('difficulty', 'medium'),
+                use_image_display=q_data.get('use_image_display', True),
+            )
+
+            if image_path and os.path.isfile(image_path):
+                with open(image_path, 'rb') as img_file:
+                    question_kwargs['question_image'] = ContentFile(
+                        img_file.read(),
+                        name=image_name,
+                    )
+
+            for opt in ['a', 'b', 'c', 'd']:
+                opt_image_path = q_data.get(f'option_{opt}_image_abs_path')
+                opt_image_name = q_data.get(
+                    f'option_{opt}_image_filename',
+                    f'q_{idx}_opt_{opt}.jpg'
+                )
+                if opt_image_path and os.path.isfile(opt_image_path):
+                    with open(opt_image_path, 'rb') as opt_file:
+                        question_kwargs[f'option_{opt}_image'] = ContentFile(
+                            opt_file.read(),
+                            name=opt_image_name,
+                        )
+
+            Question.objects.create(**question_kwargs)
+            created_count += 1
+
+        test.total_questions = created_count
+        test.save()
+        print(f"[BG THREAD] Successfully created {created_count} questions for test {test_id}.")
+
+    except Exception as e:
+        print(f"[BG THREAD] Error processing PDF: {e}")
+    finally:
+        from django.core.files.storage import default_storage
+        if default_storage.exists(pdf_path):
+            try:
+                default_storage.delete(pdf_path)
+            except Exception as e:
+                print(f"[BG THREAD] Error deleting temp PDF: {e}")
 
 
 def _normalize_correct_answer(raw_answer):
@@ -119,106 +219,43 @@ class MockTestViewSet(viewsets.ModelViewSet):
         os.makedirs(output_dir, exist_ok=True)
 
         try:
-            questions_data = parse_pdf_to_image_questions(
-                full_pdf_path,
-                output_dir,
-                api_key=settings.GEMINI_API_KEY,
-                answer_key_page=answer_key_page,
-                skip_gemini=skip_gemini,
+            thread = threading.Thread(
+                target=_process_pdf_in_background,
+                args=(
+                    pdf_path,
+                    full_pdf_path,
+                    output_dir,
+                    settings.GEMINI_API_KEY,
+                    answer_key_page,
+                    skip_gemini,
+                    test.id
+                )
             )
-
-            if not questions_data:
-                return Response(
-                    {'error': 'No questions detected in PDF. Try a clearer scan or different answer-key setting.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Replace existing questions for this test when uploading PDF
-            Question.objects.filter(test=test).delete()
-
-            created_count = 0
-            for idx, q_data in enumerate(questions_data, 1):
-                image_path = q_data.get('image_abs_path')
-                image_name = q_data.get('image_filename', f'q_{idx}.jpg')
-
-                raw_subject = str(q_data.get('subject', 'unknown')).lower().strip()
-                subject = raw_subject if raw_subject else 'unknown'
-                options = (q_data.get('options') or ['', '', '', ''])[:4]
-                options += [''] * (4 - len(options))
-
-                question_kwargs = dict(
-                    test=test,
-                    question_number=q_data.get('number', idx),
-                    question_text=q_data.get('question', f'Question {idx}'),
-                    option_a=options[0],
-                    option_b=options[1],
-                    option_c=options[2],
-                    option_d=options[3],
-                    correct_answer=_normalize_correct_answer(q_data.get('answer', '')),
-                    subject=subject,
-                    question_type=q_data.get('type', 'mcq'),
-                    difficulty=q_data.get('difficulty', 'medium'),
-                    use_image_display=q_data.get('use_image_display', True),
-                )
-
-                if image_path and os.path.isfile(image_path):
-                    with open(image_path, 'rb') as img_file:
-                        question_kwargs['question_image'] = ContentFile(
-                            img_file.read(),
-                            name=image_name,
-                        )
-
-                for opt in ['a', 'b', 'c', 'd']:
-                    opt_image_path = q_data.get(f'option_{opt}_image_abs_path')
-                    opt_image_name = q_data.get(
-                        f'option_{opt}_image_filename',
-                        f'q_{idx}_opt_{opt}.jpg'
-                    )
-                    if opt_image_path and os.path.isfile(opt_image_path):
-                        with open(opt_image_path, 'rb') as opt_file:
-                            question_kwargs[f'option_{opt}_image'] = ContentFile(
-                                opt_file.read(),
-                                name=opt_image_name,
-                            )
-
-                Question.objects.create(**question_kwargs)
-                created_count += 1
-
-            test.total_questions = created_count
-            test.save()
+            thread.daemon = True
+            thread.start()
 
             mode_label = 'free_page_images' if skip_gemini else 'ai_cropped_images'
             return Response({
                 'success': True,
                 'message': (
-                    f'Saved {created_count} questions from PDF '
+                    'PDF processing has started in the background. '
                     + (
-                        '(free mode: text questions use text/options; math or diagram questions keep images).'
+                        'Since this is Free Mode, it will extract page by page and be done in 10-20 seconds.'
                         if skip_gemini
-                        else '(AI box detection; math preserved).'
+                        else 'Since this is AI Mode, Gemini is visually cropping and scanning each question. This can take 2–5 minutes due to API rate limits. Please refresh the page in a few minutes.'
                     )
                 ),
-                'total_questions': created_count,
+                'status': 'processing',
                 'mode': mode_label,
-            }, status=status.HTTP_201_CREATED)
+            }, status=status.HTTP_202_ACCEPTED)
 
         except Exception as e:
-            err = str(e)
-            if "429" in err or "RESOURCE_EXHAUSTED" in err:
-                err = (
-                    "Gemini API free-tier quota exceeded. Options: (1) Wait 1–2 minutes and retry, "
-                    "(2) Enable billing at https://ai.google.dev/ or use a new API key, "
-                    "(3) On Render set GEMINI_MODEL=gemini-2.0-flash-lite, "
-                    "(4) Set PDF_SKIP_GEMINI=true to upload without AI (one question per page). "
-                    f"Details: {err[:400]}"
-                )
-            return Response(
-                {'error': f'PDF processing failed: {err}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        finally:
             if default_storage.exists(pdf_path):
                 default_storage.delete(pdf_path)
+            return Response(
+                {'error': f'Failed to start background PDF processing: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
     def publish(self, request, pk=None):
