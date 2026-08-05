@@ -21,7 +21,7 @@ from PIL import Image
 # CONFIG
 # ─────────────────────────────────────────────
 
-DPI = 260
+DPI = 150
 VISION_MAX_SIDE = 1280
 
 
@@ -106,6 +106,12 @@ def _render_page_as_image(pdf_path: str, page_idx: int, dpi: int = DPI) -> Image
         pix.samples
     )
     doc.close()
+
+    try:
+        fitz.tools.shrink_memory()
+    except Exception:
+        pass
+
     return img
 
 
@@ -1347,6 +1353,9 @@ def parse_pdf_to_image_questions(
             results.append(q_data)
         # Clear the page image from memory
         page_img = None
+
+        import gc
+        gc.collect()
 
     # Pass 2: Resolve dominant subject for fallback questions
     subject_counts = {}
