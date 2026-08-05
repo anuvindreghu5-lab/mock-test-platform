@@ -1057,18 +1057,37 @@ def _fallback_page_as_single_question(
 ) -> List[dict]:
 
     subject_text = _image_to_text(page_img)
-    subject = _detect_subject_from_text(subject_text)
+    subject = _detect_subject_from_text(subject_text) or "physics"
 
-    return [{
-        "number": page_num,
-        "subject": subject,
-        "box": {
-            "top": 0,
-            "left": 0,
-            "bottom": 1000,
-            "right": 1000,
+    return [
+        {
+            "subject": subject,
+            "box": {
+                "top": 0,
+                "left": 0,
+                "bottom": 333,
+                "right": 1000,
+            },
         },
-    }]
+        {
+            "subject": subject,
+            "box": {
+                "top": 333,
+                "left": 0,
+                "bottom": 666,
+                "right": 1000,
+            },
+        },
+        {
+            "subject": subject,
+            "box": {
+                "top": 666,
+                "left": 0,
+                "bottom": 1000,
+                "right": 1000,
+            },
+        },
+    ]
 
 
 # ─────────────────────────────────────────────
