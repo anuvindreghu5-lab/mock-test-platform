@@ -36,3 +36,14 @@ class ResultSerializer(serializers.ModelSerializer):
                   'correct_answers', 'wrong_answers', 'skipped_questions',
                   'obtained_marks', 'total_marks', 'percentage', 'time_taken_seconds',
                   'is_passed', 'submitted_at', 'answers']
+
+
+class ResultListSerializer(serializers.ModelSerializer):
+    test_title = serializers.CharField(source='test.title', read_only=True)
+
+    class Meta:
+        model = Result
+        fields = ['id', 'test_title', 'total_questions', 'attempted_questions',
+                  'correct_answers', 'wrong_answers', 'skipped_questions',
+                  'obtained_marks', 'total_marks', 'percentage', 'time_taken_seconds',
+                  'is_passed', 'submitted_at']

@@ -98,6 +98,13 @@ WSGI_APPLICATION = 'config.wsgi.application'
 database_url = os.getenv("DATABASE_URL")
 
 if database_url:
+    # Normalize SQLAlchemy/Render connection schemes for dj-database-url
+    if "postgresql+psycopg2://" in database_url:
+        database_url = database_url.replace("postgresql+psycopg2://", "postgresql://")
+    elif "postgresql+psycopg://" in database_url:
+        database_url = database_url.replace("postgresql+psycopg://", "postgresql://")
+    os.environ["DATABASE_URL"] = database_url
+
     DATABASES = {
         'default': dj_database_url.config(
             default=database_url,

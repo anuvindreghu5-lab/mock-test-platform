@@ -6,7 +6,7 @@ from django.utils import timezone
 from datetime import datetime
 
 from .models import Result, UserAnswer
-from .serializers import ResultSerializer
+from .serializers import ResultSerializer, ResultListSerializer
 
 from tests.models import MockTest
 from questions.models import Question
@@ -125,6 +125,10 @@ class ResultViewSet(viewsets.ViewSet):
         # PROCESS ANSWERS
         # ─────────────────────────────
 
+        question_ids = [a.get('question_id') for a in answers if a.get('question_id')]
+        questions_map = {q.id: q for q in Question.objects.filter(id__in=question_ids)}
+        user_answers_to_create = []
+
         for answer_data in answers:
 
             question_id = answer_data.get(
@@ -146,19 +150,9 @@ class ResultViewSet(viewsets.ViewSet):
                 0
             )
 
-
-
-            try:
-
-                question = Question.objects.get(
-                    id=question_id
-                )
-
-            except Question.DoesNotExist:
-
+            question = questions_map.get(question_id)
+            if not question:
                 continue
-
-
 
             is_correct = False
 
@@ -197,20 +191,18 @@ class ResultViewSet(viewsets.ViewSet):
 
                 skipped_count += 1
 
-
-
-            UserAnswer.objects.create(
-
-                result=result,
-
-                question=question,
-
-                selected_answer=selected_answer,
-
-                is_correct=is_correct,
-
-                time_spent_seconds=time_spent
+            user_answers_to_create.append(
+                UserAnswer(
+                    result=result,
+                    question=question,
+                    selected_answer=selected_answer,
+                    is_correct=is_correct,
+                    time_spent_seconds=time_spent
+                )
             )
+
+        if user_answers_to_create:
+            UserAnswer.objects.bulk_create(user_answers_to_create)
 
 
 
@@ -290,9 +282,9 @@ class ResultViewSet(viewsets.ViewSet):
 
         results = Result.objects.filter(
             user=request.user
-        ).order_by('-submitted_at')
+        ).select_related('test').order_by('-submitted_at')
 
-        serializer = ResultSerializer(
+        serializer = ResultListSerializer(
             results,
             many=True
         )

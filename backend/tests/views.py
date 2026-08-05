@@ -32,8 +32,13 @@ def _normalize_correct_answer(raw_answer):
 
 
 class MockTestViewSet(viewsets.ModelViewSet):
-    queryset = MockTest.objects.all()
     permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = MockTest.objects.all().select_related('created_by')
+        if self.action == 'retrieve':
+            return queryset.prefetch_related('questions')
+        return queryset
 
     def get_permissions(self):
         if self.action in ['upload_pdf', 'publish']:
@@ -64,14 +69,14 @@ class MockTestViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def my_tests(self, request):
-        tests = MockTest.objects.filter(created_by=request.user)
-        serializer = MockTestListSerializer(tests, many=True)
+        tests = self.get_queryset().filter(created_by=request.user)
+        serializer = self.get_serializer(tests, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'])
     def available_tests(self, request):
-        tests = MockTest.objects.filter(status='published')
-        serializer = MockTestListSerializer(tests, many=True)
+        tests = self.get_queryset().filter(status='published')
+        serializer = self.get_serializer(tests, many=True)
         return Response(serializer.data)
 
     def get_serializer_context(self):
