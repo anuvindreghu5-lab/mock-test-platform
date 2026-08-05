@@ -45,7 +45,7 @@ def _gemini_models_to_try() -> List[str]:
 
     extra = os.environ.get("GEMINI_MODEL_FALLBACKS") or _django_setting(
         "GEMINI_MODEL_FALLBACKS",
-        "gemini-2.0-flash-lite,gemini-1.5-flash",
+        "gemini-2.0-flash,gemini-2.0-flash-lite,gemini-flash-latest",
     )
 
     models = [primary] + [
