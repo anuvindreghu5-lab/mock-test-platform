@@ -87,11 +87,7 @@ def _is_quota_error(exc: BaseException) -> bool:
 # PDF TO IMAGES — PyMuPDF
 # ─────────────────────────────────────────────
 
-def _pdf_to_images(
-    pdf_path: str,
-    dpi: int = DPI
-) -> List[Image.Image]:
-
+def _render_page_as_image(pdf_path: str, page_idx: int, dpi: int = DPI) -> Image.Image:
     try:
         import fitz
     except ImportError:
@@ -100,31 +96,17 @@ def _pdf_to_images(
         )
 
     doc = fitz.open(pdf_path)
-
-    images = []
-
+    page = doc[page_idx]
     zoom = dpi / 72
     mat = fitz.Matrix(zoom, zoom)
-
-    for page in doc:
-
-        pix = page.get_pixmap(matrix=mat)
-
-        img = Image.frombytes(
-            "RGB",
-            [pix.width, pix.height],
-            pix.samples
-        )
-
-        images.append(img)
-
-        pix = None
-
+    pix = page.get_pixmap(matrix=mat)
+    img = Image.frombytes(
+        "RGB",
+        [pix.width, pix.height],
+        pix.samples
+    )
     doc.close()
-
-    print(f"[PDF Images] Converted {len(images)} pages")
-
-    return images
+    return img
 
 
 # ─────────────────────────────────────────────
@@ -1118,18 +1100,10 @@ def parse_pdf_to_image_questions(
     import fitz
     doc = fitz.open(pdf_path)
     total = len(doc)
+    doc.close()
 
     if total == 0:
-        doc.close()
         return []
-
-    def render_page_img(page_idx):
-        zoom = DPI / 72
-        mat = fitz.Matrix(zoom, zoom)
-        page = doc[page_idx]
-        pix = page.get_pixmap(matrix=mat)
-        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-        return img
 
     answer_key_index = None
     if total > 1:
@@ -1145,7 +1119,7 @@ def parse_pdf_to_image_questions(
 
     answer_key_image = None
     if answer_key_index is not None and answer_key_index < total:
-        answer_key_image = render_page_img(answer_key_index)
+        answer_key_image = _render_page_as_image(pdf_path, answer_key_index, dpi=DPI)
 
     text_boxes_by_page = (
         _detect_text_question_boxes(
@@ -1183,7 +1157,7 @@ def parse_pdf_to_image_questions(
     for original_page_index in question_page_indices:
 
         page_no = original_page_index + 1
-        page_img = render_page_img(original_page_index)
+        page_img = _render_page_as_image(pdf_path, original_page_index, dpi=DPI)
 
         if skip_ai:
 
@@ -1419,5 +1393,4 @@ def parse_pdf_to_image_questions(
         f"[PDF Images] Total questions extracted: {len(final)}"
     )
 
-    doc.close()
     return final
