@@ -86,6 +86,9 @@ def _skip_gemini() -> bool:
 def _is_quota_error(exc: BaseException) -> bool:
     text = str(exc).upper()
 
+    if "LIMIT: 0" in text or "LIMIT:0" in text or "LIMIT 0" in text:
+        return False
+
     return (
         "429" in text or
         "RESOURCE_EXHAUSTED" in text or

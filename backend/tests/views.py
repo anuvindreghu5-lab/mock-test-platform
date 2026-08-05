@@ -41,6 +41,10 @@ def _process_pdf_in_background(
             print(f"[BG THREAD] Test {test_id} not found.")
             return
 
+        orig_description = test.description
+        test.description = f"[Processing PDF in background...]\n\n{orig_description}"
+        test.save()
+
         questions_data = parse_pdf_to_image_questions(
             full_pdf_path,
             output_dir,
@@ -51,6 +55,8 @@ def _process_pdf_in_background(
 
         if not questions_data:
             print(f"[BG THREAD] No questions detected in PDF for test {test_id}.")
+            test.description = f"[Failed: No questions detected in PDF]\n\n{orig_description}"
+            test.save()
             return
 
         # Replace existing questions for this test when uploading PDF
@@ -105,11 +111,19 @@ def _process_pdf_in_background(
             created_count += 1
 
         test.total_questions = created_count
+        test.description = orig_description
         test.save()
         print(f"[BG THREAD] Successfully created {created_count} questions for test {test_id}.")
 
     except Exception as e:
         print(f"[BG THREAD] Error processing PDF: {e}")
+        try:
+            test = MockTest.objects.filter(id=test_id).first()
+            if test:
+                test.description = f"[PDF Processing Failed: {str(e)[:400]}]\n\n{test.description}"
+                test.save()
+        except Exception:
+            pass
     finally:
         from django.core.files.storage import default_storage
         if default_storage.exists(pdf_path):
