@@ -1280,8 +1280,6 @@ def parse_pdf_to_image_questions(
             # High-precision subject classification using extracted text / OCR
             extracted_text = ""
             try:
-                import fitz
-                doc = fitz.open(pdf_path)
                 page = doc[original_page_index]
                 page_w = float(page.rect.width) or 1.0
                 page_h = float(page.rect.height) or 1.0
@@ -1294,7 +1292,6 @@ def parse_pdf_to_image_questions(
                 
                 rect = fitz.Rect(left, top, right, bottom)
                 extracted_text = page.get_text("text", clip=rect).strip()
-                doc.close()
             except Exception:
                 pass
 
