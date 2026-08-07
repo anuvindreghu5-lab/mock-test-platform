@@ -36,6 +36,7 @@ const AdminUpload = () => {
   const [pdfFile, setPdfFile] = useState(null);
   const [answerKeyPage, setAnswerKeyPage] = useState("last");
   const [freePdfMode, setFreePdfMode] = useState(true);
+  const [skipFirstPages, setSkipFirstPages] = useState(1);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [testId, setTestId] = useState(null);
@@ -165,6 +166,7 @@ const AdminUpload = () => {
       form.append("pdf_file", pdfFile);
       form.append("answer_key_page", answerKeyPage);
       form.append("skip_gemini", freePdfMode ? "true" : "false");
+      form.append("skip_first_pages", skipFirstPages.toString());
 
       const response = await api.post(`/tests/${testId}/upload_pdf/`, form, {
         timeout: 600000,
@@ -626,6 +628,16 @@ const AdminUpload = () => {
                     <option value="first" className="bg-gray-900">First page is answer key</option>
                     <option value="none" className="bg-gray-900">No separate answer key page</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-gray-300 font-semibold mb-2">Skip initial instruction/cover pages</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={skipFirstPages}
+                    onChange={(e) => setSkipFirstPages(parseInt(e.target.value, 10) || 0)}
+                    className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-400"
+                  />
                 </div>
                 <button type="button" onClick={handleUploadPdf} disabled={!pdfFile || loading} className="w-full bg-gradient-to-r from-amber-500 to-orange-400 text-white py-3 rounded-xl font-semibold hover:opacity-90 disabled:opacity-50">
                   {loading ? "Processing PDF…" : freePdfMode ? "Upload PDF (free) →" : "Upload PDF (AI) →"}

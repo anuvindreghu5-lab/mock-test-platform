@@ -27,7 +27,8 @@ def _process_pdf_in_background(
     api_key,
     answer_key_page,
     skip_gemini,
-    test_id
+    test_id,
+    skip_first_pages=1
 ):
     try:
         from questions.pdf_parser_images import parse_pdf_to_image_questions
@@ -51,6 +52,7 @@ def _process_pdf_in_background(
             api_key=api_key,
             answer_key_page=answer_key_page,
             skip_gemini=skip_gemini,
+            skip_first_pages=skip_first_pages,
         )
 
         if not questions_data:
@@ -223,6 +225,11 @@ class MockTestViewSet(viewsets.ModelViewSet):
         else:
             skip_gemini = str(skip_gemini_raw).lower() in ('1', 'true', 'yes')
 
+        try:
+            skip_first_pages = int(request.data.get('skip_first_pages', 1))
+        except (ValueError, TypeError):
+            skip_first_pages = 1
+
         # Free mode: no Gemini key required (one image per PDF page)
         if not settings.GEMINI_API_KEY:
             skip_gemini = True
@@ -242,7 +249,8 @@ class MockTestViewSet(viewsets.ModelViewSet):
                     settings.GEMINI_API_KEY,
                     answer_key_page,
                     skip_gemini,
-                    test.id
+                    test.id,
+                    skip_first_pages
                 )
             )
             thread.daemon = True

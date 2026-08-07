@@ -134,19 +134,23 @@ def _render_page_as_image(pdf_path: str, page_idx: int, dpi: int = DPI) -> Image
 
 def _question_page_indices(
     total_pages: int,
-    answer_key_page: str
+    answer_key_page: str,
+    skip_first_pages: int = 1,
 ) -> List[int]:
 
     if total_pages <= 1:
         return list(range(total_pages))
 
     if answer_key_page == "last":
-        return list(range(total_pages - 1))
+        indices = list(range(total_pages - 1))
 
-    if answer_key_page == "first":
-        return list(range(1, total_pages))
+    elif answer_key_page == "first":
+        indices = list(range(1, total_pages))
 
-    return list(range(total_pages))
+    else:
+        indices = list(range(total_pages))
+
+    return [idx for idx in indices if idx >= skip_first_pages]
 
 
 def _clean_option_text(option: str) -> str:
@@ -1100,6 +1104,7 @@ def parse_pdf_to_image_questions(
     api_key: Optional[str] = None,
     answer_key_page: str = "last",
     skip_gemini: Optional[bool] = None,
+    skip_first_pages: int = 1,
 ) -> List[Dict]:
 
     os.makedirs(output_dir, exist_ok=True)
@@ -1136,7 +1141,8 @@ def parse_pdf_to_image_questions(
 
     question_page_indices = _question_page_indices(
         total,
-        answer_key_page
+        answer_key_page,
+        skip_first_pages=skip_first_pages,
     )
 
     answer_key_image = None
