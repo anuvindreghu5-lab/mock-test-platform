@@ -37,6 +37,7 @@ const AdminUpload = () => {
   const [answerKeyPage, setAnswerKeyPage] = useState("last");
   const [freePdfMode, setFreePdfMode] = useState(true);
   const [skipFirstPages, setSkipFirstPages] = useState(1);
+  const [slicesPerPage, setSlicesPerPage] = useState(6);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [testId, setTestId] = useState(null);
@@ -167,6 +168,7 @@ const AdminUpload = () => {
       form.append("answer_key_page", answerKeyPage);
       form.append("skip_gemini", freePdfMode ? "true" : "false");
       form.append("skip_first_pages", skipFirstPages.toString());
+      form.append("slices_per_page", slicesPerPage.toString());
 
       const response = await api.post(`/tests/${testId}/upload_pdf/`, form, {
         timeout: 600000,
@@ -639,6 +641,23 @@ const AdminUpload = () => {
                     className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-400"
                   />
                 </div>
+                {freePdfMode && (
+                  <div>
+                    <label className="block text-gray-300 font-semibold mb-2">Slices per page (Free Mode layout splitting)</label>
+                    <select value={slicesPerPage} onChange={(e) => setSlicesPerPage(parseInt(e.target.value, 10))} className={selectClass}>
+                      <option value="1" className="bg-gray-900">1 slice per page (full page)</option>
+                      <option value="2" className="bg-gray-900">2 slices per page</option>
+                      <option value="3" className="bg-gray-900">3 slices per page</option>
+                      <option value="4" className="bg-gray-900">4 slices per page</option>
+                      <option value="5" className="bg-gray-900">5 slices per page</option>
+                      <option value="6" className="bg-gray-900">6 slices per page (recommended for standard exams)</option>
+                      <option value="7" className="bg-gray-900">7 slices per page</option>
+                      <option value="8" className="bg-gray-900">8 slices per page</option>
+                      <option value="9" className="bg-gray-900">9 slices per page</option>
+                      <option value="10" className="bg-gray-900">10 slices per page</option>
+                    </select>
+                  </div>
+                )}
                 <button type="button" onClick={handleUploadPdf} disabled={!pdfFile || loading} className="w-full bg-gradient-to-r from-amber-500 to-orange-400 text-white py-3 rounded-xl font-semibold hover:opacity-90 disabled:opacity-50">
                   {loading ? "Processing PDF…" : freePdfMode ? "Upload PDF (free) →" : "Upload PDF (AI) →"}
                 </button>

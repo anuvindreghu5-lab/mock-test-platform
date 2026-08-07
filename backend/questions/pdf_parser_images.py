@@ -1057,41 +1057,27 @@ def _detect_boxes(
 
 def _fallback_page_as_single_question(
     page_img: Image.Image,
-    page_num: int
+    page_num: int,
+    slices_per_page: int = 6
 ) -> List[dict]:
 
     subject_text = _image_to_text(page_img)
     subject = _detect_subject_from_text(subject_text) or "physics"
 
-    return [
-        {
+    slices = []
+    for i in range(slices_per_page):
+        top = int((1000 / slices_per_page) * i)
+        bottom = int((1000 / slices_per_page) * (i + 1))
+        slices.append({
             "subject": subject,
             "box": {
-                "top": 0,
+                "top": top,
                 "left": 0,
-                "bottom": 333,
+                "bottom": bottom,
                 "right": 1000,
             },
-        },
-        {
-            "subject": subject,
-            "box": {
-                "top": 333,
-                "left": 0,
-                "bottom": 666,
-                "right": 1000,
-            },
-        },
-        {
-            "subject": subject,
-            "box": {
-                "top": 666,
-                "left": 0,
-                "bottom": 1000,
-                "right": 1000,
-            },
-        },
-    ]
+        })
+    return slices
 
 
 # ─────────────────────────────────────────────
@@ -1105,6 +1091,7 @@ def parse_pdf_to_image_questions(
     answer_key_page: str = "last",
     skip_gemini: Optional[bool] = None,
     skip_first_pages: int = 1,
+    slices_per_page: int = 6,
 ) -> List[Dict]:
 
     os.makedirs(output_dir, exist_ok=True)
@@ -1193,7 +1180,8 @@ def parse_pdf_to_image_questions(
                 text_boxes_by_page.get(original_page_index)
                 or _fallback_page_as_single_question(
                     page_img,
-                    page_no
+                    page_no,
+                    slices_per_page=slices_per_page
                 )
             )
 
@@ -1211,7 +1199,8 @@ def parse_pdf_to_image_questions(
 
                     boxes = _fallback_page_as_single_question(
                         page_img,
-                        page_no
+                        page_no,
+                        slices_per_page=slices_per_page
                     )
 
                 else:
@@ -1220,7 +1209,8 @@ def parse_pdf_to_image_questions(
             if not boxes:
                 boxes = _fallback_page_as_single_question(
                     page_img,
-                    page_no
+                    page_no,
+                    slices_per_page=slices_per_page
                 )
 
         for item in boxes:
