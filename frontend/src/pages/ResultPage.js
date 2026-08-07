@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../services/api";
+import { QuestionBody } from "../components/QuestionMedia";
 
 const ResultPage = () => {
   const { resultId } = useParams();
@@ -308,9 +309,10 @@ const getOptionText = (question, answer) => {
   .filter((a) => a.selected_answer && !a.is_correct)
   .map((answer, idx) => (
     <div key={idx} className="bg-red-500/10 border border-red-500/20 rounded-2xl p-5">
-      <h4 className="text-lg font-bold mb-4">
-        Q{answer.originalIdx + 1}. {answer.question.question_text}
-      </h4>
+      <div className="text-lg font-bold mb-4">
+        <span className="mr-2">Q{answer.originalIdx + 1}.</span>
+        <QuestionBody question={answer.question} />
+      </div>
 
                     <div className="space-y-3">
 
@@ -379,9 +381,10 @@ const getOptionText = (question, answer) => {
   .filter((a) => a.is_correct)
   .map((answer, idx) => (
     <div key={idx} className="bg-green-500/10 border border-green-500/20 rounded-2xl p-5">
-      <h4 className="text-lg font-bold mb-4">
-        Q{answer.originalIdx + 1}. {answer.question.question_text}
-      </h4>
+      <div className="text-lg font-bold mb-4">
+        <span className="mr-2">Q{answer.originalIdx + 1}.</span>
+        <QuestionBody question={answer.question} />
+      </div>
                     <div className="bg-green-500/10 rounded-2xl p-3 border border-green-500/20">
 
                       <p className="text-xs text-gray-400 mb-1">
@@ -421,9 +424,10 @@ const getOptionText = (question, answer) => {
   .filter((a) => !a.selected_answer)
   .map((answer, idx) => (
     <div key={idx} className="bg-white/5 border border-white/10 rounded-2xl p-5">
-      <h4 className="text-lg font-bold mb-4">
-        Q{answer.originalIdx + 1}. {answer.question.question_text}
-      </h4>
+      <div className="text-lg font-bold mb-4">
+        <span className="mr-2">Q{answer.originalIdx + 1}.</span>
+        <QuestionBody question={answer.question} />
+      </div>
 
                     <div className="space-y-3">
 
